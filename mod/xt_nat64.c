@@ -109,6 +109,7 @@
 #include "nf_nat64_generic_functions.h"
 #include "nf_nat64_auxiliary_functions.h"
 #include "nf_nat64_filtering_and_updating.h"
+#include "nf_nat64_ipv4_pool.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Juan Antonio Osorio <jaosorior@gmail.com>");
@@ -1676,6 +1677,9 @@ static int __init nat64_init(void)
 	ipv4_netmask = 0xffffff00; // Mask of 24 IPv4
 	prefix_address = "fec0::24"; // Default IPv6
 	prefix_len = 32; // Default IPv6 Prefix
+
+    // init IPv4 addresses pool
+    init_pools();
 
 	/*
 	 * Include nf_conntrack dependency

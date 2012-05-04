@@ -4,6 +4,10 @@
 #include <linux/string.h>
 #include <linux/inet.h>
 #include <linux/in6.h>
+#ifndef _NF_NAT64_IPV4_POOL_H
+#include "nf_nat64_ipv4_pool.h"
+#endif
+
 
 #define UDP_DEFAULT_ 5*60
 #define ICMP_DEFAULT_ 1*60
@@ -74,6 +78,8 @@ extern struct kmem_cache *bib_cacheTCP;
 extern struct hlist_head *hash6;
 extern struct hlist_head *hash4;
 extern __be32 ipv4_addr;
+extern struct list_head free_transport_addr;
+
 
 static inline __be16 nat64_hash4(__be32 addr, __be16 port)
 {
@@ -487,8 +493,23 @@ static inline struct nat64_bib_entry
 	struct nat64_bib_entry *bib;
 	struct nat64_st_entry *session;
 	__be16 local4_port;
+  __be32 local4_addr;
 
-	local4_port = bib_allocate_local4_port(sport, protocol); // FIXME: Should be different than sport
+  // local4_port = bib_allocate_local4_port(sport, protocol); // FIXME: Should be different than sport
+  struct transport_addr_struct *transport_addr;
+  transport_addr = get_tranport_addr(&free_transport_addr);
+  
+  if(transport_addr == NULL){
+    printk("pool out of ipv4 address\n");
+    local4_port = -1;
+    local4_addr = -1;
+  }else{
+    INIT_LIST_HEAD(&transport_addr->list);
+    local4_port = ntohs(transport_addr->port);
+    in4_pton(transport_addr->address, -1, (u8 *)&local4_addr, '\x0', NULL);
+    pr_debug("using address %s and port %u.\n", transport_addr->address, transport_addr->port);
+  }
+  
 	if (local4_port < 0) {
 		pr_debug("NAT64: [bib] Unable to allocate new local IPv4 port. Dropping connection.\n");
 		return NULL;
@@ -515,16 +536,33 @@ static inline struct nat64_bib_entry *bib_session_create_tcp(struct in6_addr *sa
 {
 	struct nat64_bib_entry *bib;
 	struct nat64_st_entry *session;
-	__be16 local4_port;
+	__be16 local4_port;	
+	__be32 local4_addr;
+	
 	pr_debug("NAT64: [bib1] source PORT %hu .\n", ntohs(sport));
-	local4_port = bib_allocate_local4_port(sport, protocol); // FIXME: Should be different than sport
+
+  // local4_port = bib_allocate_local4_port(sport, protocol); // FIXME: Should be different than sport
+  struct transport_addr_struct *transport_addr;
+  transport_addr = get_tranport_addr(&free_transport_addr);
+  
+  if(transport_addr == NULL){
+    printk("pool out of ipv4 address\n");
+    local4_port = -1;
+    local4_addr = -1;
+  }else{
+    INIT_LIST_HEAD(&transport_addr->list);
+    local4_port = transport_addr->port;
+    in4_pton(transport_addr->address, -1, (u8 *)&local4_addr, '\x0', NULL);
+  }
+  
+
 	if (local4_port < 0) {
 		pr_debug("NAT64: [bib] Unable to allocate new local IPv4 port. Dropping connection.");
 		return NULL;
 	}
 	pr_debug("NAT64: [bib2] destination PORT %hu .\n", ntohs(dport));
 
-	bib = bib_create_tcp(saddr, sport, ipv4_addr, local4_port, protocol);
+	bib = bib_create_tcp(saddr, sport, local4_addr, local4_port, protocol);
 	if (!bib)
 		return NULL;
 
